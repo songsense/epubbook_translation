@@ -11,7 +11,7 @@ This project can be run using Docker, which eliminates the need to install depen
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/epub-translator.git
+   git clone https://github.com/songsense/epub-translator.git
    cd epub-translator
    ```
 
