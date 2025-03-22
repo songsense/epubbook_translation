@@ -6,7 +6,8 @@
   "translation": {
     "default_source_language": "auto",
     "default_target_language": "Chinese",
-    "default_batch_size": 5
+    "default_batch_size": 5,
+    "translation_only": false
   },
   "available_models": {
     "gpt-4o-mini": {
