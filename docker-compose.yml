@@ -1,0 +1,10 @@
+version: '3'
+
+services:
+  epub-translator:
+    build: .
+    volumes:
+      - ./books:/books
+      - ./config.json:/app/config.json
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}

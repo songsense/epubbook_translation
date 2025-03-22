@@ -1,0 +1,28 @@
+{
+  "openai": {
+    "api_key": "YOUR_API_KEY_HERE",
+    "default_model": "gpt-4o-mini"
+  },
+  "translation": {
+    "default_source_language": "auto",
+    "default_target_language": "Chinese",
+    "default_batch_size": 5
+  },
+  "available_models": {
+    "gpt-4o-mini": {
+      "description": "Fast and accurate for most translations",
+      "context_length": 128000,
+      "rate_limit_wait": 3
+    },
+    "gpt-4": {
+      "description": "Higher accuracy for complex or nuanced content",
+      "context_length": 8192,
+      "rate_limit_wait": 5
+    },
+    "gpt-4-turbo": {
+      "description": "Latest model with improved translations and context length",
+      "context_length": 16384,
+      "rate_limit_wait": 5
+    }
+  }
+}
