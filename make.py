@@ -168,7 +168,8 @@ class OpenAITranslator(TranslationService):
 class EPUBProcessor:
     """Process EPUB files for translation"""
     
-    def __init__(self, epub_path: str, translator: TranslationService, batch_size: int = 5):
+    def __init__(self, epub_path: str, translator: TranslationService, batch_size: int = 5, 
+                translation_only: bool = False):
         """
         Initialize the EPUB processor
         
@@ -176,10 +177,12 @@ class EPUBProcessor:
             epub_path: Path to the EPUB file
             translator: Translation service to use
             batch_size: Number of paragraphs to translate at once
+            translation_only: If True, only show translation without the original text
         """
         self.epub_path = epub_path
         self.translator = translator
         self.batch_size = min(max(1, batch_size), 10)  # Ensure between 1 and 10
+        self.translation_only = translation_only
         self.console = Console()
         
     def translate_epub(self, source_lang: str = "auto", target_lang: str = "Chinese", 
@@ -202,6 +205,7 @@ class EPUBProcessor:
         
         self.console.print(f"[bold green]Translating[/bold green] {self.epub_path} → {output_path}")
         self.console.print(f"From: {source_lang} to: {target_lang} (Batch size: {self.batch_size})")
+        self.console.print(f"Translation mode: {'Translation only' if self.translation_only else 'Original + Translation'}")
         
         # Read the original book
         origin_book = epub.read_epub(self.epub_path)
@@ -294,8 +298,12 @@ class EPUBProcessor:
         # Update paragraphs with translations
         for i, p in enumerate(paragraphs):
             if i < len(translated_texts):
-                # Add translation after original text
-                p.string = f"{p.text} [{translated_texts[i]}]"
+                if self.translation_only:
+                    # Replace original text with translation only
+                    p.string = translated_texts[i]
+                else:
+                    # Add translation after original text
+                    p.string = f"{p.text} [{translated_texts[i]}]"
 
 
 def load_config(config_path="config.json") -> Dict:
@@ -358,7 +366,8 @@ def get_default_config() -> Dict:
         "translation": {
             "default_source_language": "auto",
             "default_target_language": "Chinese",
-            "default_batch_size": 5
+            "default_batch_size": 5,
+            "translation_only": False
         },
         "available_models": {
             "gpt-4o-mini": {
@@ -397,6 +406,7 @@ def main():
     default_source = config.get("translation", {}).get("default_source_language", "auto")
     default_target = config.get("translation", {}).get("default_target_language", "Chinese")
     default_batch = config.get("translation", {}).get("default_batch_size", 5)
+    translation_only = config.get("translation", {}).get("translation_only", False)
     config_api_key = config.get("openai", {}).get("api_key", "")
     
     # Get available models for choices
@@ -457,6 +467,12 @@ def main():
         help=f"OpenAI model to use (default: {default_model})"
     )
     parser.add_argument(
+        "--translation_only",
+        dest="translation_only",
+        action="store_true",
+        help="Show only the translated text without the original (default: False)"
+    )
+    parser.add_argument(
         "--list-models",
         dest="list_models",
         action="store_true",
@@ -505,10 +521,14 @@ def main():
         model_config=model_config
     )
     
+    # Use translation_only from command line if specified, otherwise from config
+    translation_only_setting = options.translation_only if options.translation_only else translation_only
+    
     processor = EPUBProcessor(
         epub_path=options.book_path,
         translator=translator,
-        batch_size=options.batch_size
+        batch_size=options.batch_size,
+        translation_only=translation_only_setting
     )
     
     # Translate the book
