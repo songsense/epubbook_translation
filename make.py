@@ -14,7 +14,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeEl
 
 class TranslationService:
     """Base class for translation services"""
-    def translate_batch(self, texts: List[str], source_lang: str, target_lang: str) -> List[str]:
+    def translate_batch(self, texts: List[str], source_lang: str, target_lang: str, custom_prompt: str = None) -> List[str]:
         """Translate a batch of texts from source_lang to target_lang"""
         raise NotImplementedError("Subclasses must implement this method")
 
@@ -23,7 +23,7 @@ class OpenAITranslator(TranslationService):
     """Translation service using OpenAI's API"""
     
     def __init__(self, api_key: str, model: str = "gpt-3.5-turbo", rate_limit_wait: int = 3, 
-                model_config: Optional[Dict] = None):
+                model_config: Optional[Dict] = None, custom_prompt: Optional[str] = None):
         """
         Initialize the OpenAI translator
         
@@ -32,10 +32,12 @@ class OpenAITranslator(TranslationService):
             model: Model to use for translation
             rate_limit_wait: Seconds to wait between API calls to avoid rate limiting
             model_config: Configuration details for available models
+            custom_prompt: Custom prompt to use for translation
         """
         self.api_key = api_key
         self.model = model
         self.model_config = model_config or {}
+        self.custom_prompt = custom_prompt
         
         # Get model-specific rate limit wait time if available
         if model_config and model in model_config:
@@ -52,7 +54,12 @@ class OpenAITranslator(TranslationService):
             model_info = f" - {model_config[model].get('description', '')}"
         self.console.print(f"[cyan]Using OpenAI model:[/cyan] [bold]{model}[/bold]{model_info}")
         
-    def translate_batch(self, texts: List[str], source_lang: str = "auto", target_lang: str = "Chinese") -> List[str]:
+        # Log if custom prompt is used
+        if self.custom_prompt:
+            self.console.print(f"[cyan]Using custom translation prompt[/cyan]")
+        
+    def translate_batch(self, texts: List[str], source_lang: str = "auto", target_lang: str = "Chinese", 
+                        custom_prompt: Optional[str] = None) -> List[str]:
         """
         Translate a batch of texts using OpenAI
         
@@ -60,6 +67,8 @@ class OpenAITranslator(TranslationService):
             texts: List of texts to translate
             source_lang: Source language (default: auto-detect)
             target_lang: Target language (default: Chinese)
+            custom_prompt: Custom prompt to use for this specific translation batch
+                           (overrides the instance-level custom_prompt)
             
         Returns:
             List of translated texts
@@ -69,6 +78,9 @@ class OpenAITranslator(TranslationService):
             
         self.console.print(f"Translating batch of {len(texts)} texts to {target_lang}")
         
+        # Use provided custom_prompt if available, otherwise use instance-level custom_prompt
+        effective_custom_prompt = custom_prompt if custom_prompt is not None else self.custom_prompt
+        
         # Format the input for better context
         input_text = str(texts)
         
@@ -76,7 +88,7 @@ class OpenAITranslator(TranslationService):
         system_message = f"You are a professional translator from {source_lang} to {target_lang}."
         
         try:
-            response = self._make_translation_request(system_message, input_text, target_lang)
+            response = self._make_translation_request(system_message, input_text, target_lang, effective_custom_prompt)
             translated_texts = self._parse_translation_response(response)
             
             # Verify we got the right number of translations
@@ -87,6 +99,7 @@ class OpenAITranslator(TranslationService):
                     system_message, 
                     input_text, 
                     target_lang,
+                    effective_custom_prompt,
                     "Return exactly the same number of elements as in the input list. Each element should be a translation of the corresponding element in the input."
                 )
                 translated_texts = self._parse_translation_response(response)
@@ -112,7 +125,7 @@ class OpenAITranslator(TranslationService):
             
             # Retry once after error
             try:
-                response = self._make_translation_request(system_message, input_text, target_lang)
+                response = self._make_translation_request(system_message, input_text, target_lang, effective_custom_prompt)
                 translated_texts = self._parse_translation_response(response)
                 return translated_texts
             except Exception as retry_error:
@@ -121,18 +134,24 @@ class OpenAITranslator(TranslationService):
                 return ["[Translation failed]"] * len(texts)
     
     def _make_translation_request(self, system_message: str, input_text: str, target_lang: str, 
-                                 additional_instructions: str = "") -> Dict[str, Any]:
+                                 custom_prompt: Optional[str] = None, additional_instructions: str = "") -> Dict[str, Any]:
         """Make the actual API request to OpenAI"""
-        prompt = (f"Please translate the following text to {target_lang}. "
-                 f"Return only the translated content as a list in the same format as the input. "
-                 f"Maintain the same formatting as the original text for each list element. "
-                 f"{additional_instructions}")
+        base_prompt = (f"Please translate the following text to {target_lang}. "
+                     f"Return only the translated content as a list in the same format as the input. "
+                     f"Maintain the same formatting as the original text for each list element. ")
+        
+        # Add custom prompt if provided
+        if custom_prompt:
+            base_prompt += f"{custom_prompt} "
+            
+        # Add additional instructions if provided
+        base_prompt += additional_instructions
                  
         response = self.client.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": system_message},
-                {"role": "user", "content": f"{prompt} ```{input_text}```"}
+                {"role": "user", "content": f"{base_prompt} ```{input_text}```"}
             ],
             temperature=0.3  # Lower temperature for more consistent translations
         )
@@ -169,7 +188,7 @@ class EPUBProcessor:
     """Process EPUB files for translation"""
     
     def __init__(self, epub_path: str, translator: TranslationService, batch_size: int = 5, 
-                translation_only: bool = False):
+                translation_only: bool = False, custom_prompt: Optional[str] = None):
         """
         Initialize the EPUB processor
         
@@ -178,11 +197,13 @@ class EPUBProcessor:
             translator: Translation service to use
             batch_size: Number of paragraphs to translate at once
             translation_only: If True, only show translation without the original text
+            custom_prompt: Custom prompt to use for translation
         """
         self.epub_path = epub_path
         self.translator = translator
         self.batch_size = min(max(1, batch_size), 10)  # Ensure between 1 and 10
         self.translation_only = translation_only
+        self.custom_prompt = custom_prompt
         self.console = Console()
         
     def translate_epub(self, source_lang: str = "auto", target_lang: str = "Chinese", 
@@ -206,6 +227,9 @@ class EPUBProcessor:
         self.console.print(f"[bold green]Translating[/bold green] {self.epub_path} → {output_path}")
         self.console.print(f"From: {source_lang} to: {target_lang} (Batch size: {self.batch_size})")
         self.console.print(f"Translation mode: {'Translation only' if self.translation_only else 'Original + Translation'}")
+        
+        if self.custom_prompt:
+            self.console.print(f"[cyan]Using custom prompt:[/cyan] {self.custom_prompt}")
         
         # Read the original book
         origin_book = epub.read_epub(self.epub_path)
@@ -293,7 +317,7 @@ class EPUBProcessor:
         texts = [p.text for p in paragraphs]
         
         # Translate texts
-        translated_texts = self.translator.translate_batch(texts, source_lang, target_lang)
+        translated_texts = self.translator.translate_batch(texts, source_lang, target_lang, self.custom_prompt)
         
         # Update paragraphs with translations
         for i, p in enumerate(paragraphs):
@@ -367,7 +391,8 @@ def get_default_config() -> Dict:
             "default_source_language": "auto",
             "default_target_language": "Chinese",
             "default_batch_size": 5,
-            "translation_only": False
+            "translation_only": False,
+            "custom_prompt": "Translate the text, preserving names, proper nouns, and technical terms. Maintain the original formatting and style."
         },
         "available_models": {
             "gpt-4o-mini": {
@@ -407,6 +432,7 @@ def main():
     default_target = config.get("translation", {}).get("default_target_language", "Chinese")
     default_batch = config.get("translation", {}).get("default_batch_size", 5)
     translation_only = config.get("translation", {}).get("translation_only", False)
+    custom_prompt = config.get("translation", {}).get("custom_prompt", "")
     config_api_key = config.get("openai", {}).get("api_key", "")
     
     # Get available models for choices
@@ -473,6 +499,13 @@ def main():
         help="Show only the translated text without the original (default: False)"
     )
     parser.add_argument(
+        "--custom_prompt",
+        dest="custom_prompt",
+        type=str,
+        default=custom_prompt,
+        help="Custom prompt to guide translation (overrides config.json)"
+    )
+    parser.add_argument(
         "--list-models",
         dest="list_models",
         action="store_true",
@@ -518,7 +551,8 @@ def main():
     translator = OpenAITranslator(
         api_key=api_key, 
         model=options.model,
-        model_config=model_config
+        model_config=model_config,
+        custom_prompt=options.custom_prompt
     )
     
     # Use translation_only from command line if specified, otherwise from config
@@ -528,7 +562,8 @@ def main():
         epub_path=options.book_path,
         translator=translator,
         batch_size=options.batch_size,
-        translation_only=translation_only_setting
+        translation_only=translation_only_setting,
+        custom_prompt=options.custom_prompt
     )
     
     # Translate the book

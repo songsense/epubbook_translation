@@ -7,7 +7,8 @@
     "default_source_language": "auto",
     "default_target_language": "Chinese",
     "default_batch_size": 5,
-    "translation_only": false
+    "translation_only": false,
+     "custom_prompt": "Translate the text, preserving names, proper nouns, and technical terms. Maintain the original formatting and style."
   },
   "available_models": {
     "gpt-4o-mini": {

@@ -11,7 +11,7 @@ This project can be run using Docker, which eliminates the need to install depen
 
 1. Clone the repository:
    ```
-   git clone https://github.com/songsense/epub-translator.git
+   git clone https://github.com/yourusername/epub-translator.git
    cd epub-translator
    ```
 
@@ -38,6 +38,26 @@ This project can be run using Docker, which eliminates the need to install depen
 3. All parameters work the same as in the normal usage, except for the book path which should be prefixed with `/books/` since that's where the Docker container mounts your books directory.
 
 4. The translated EPUB will be saved back to your `books` directory.
+
+### Custom Translation Prompts
+
+You can customize the translation behavior by providing a custom prompt in the config file or via command line:
+
+1. In the config.json file:
+   ```json
+   {
+     "translation": {
+       "custom_prompt": "Maintain academic tone and preserve technical terminology. For novel text, keep character names in their original form."
+     }
+   }
+   ```
+
+2. Or via command line:
+   ```bash
+   ./run.sh --book_path /books/your-book.epub --target_lang Spanish --custom_prompt "Maintain literary style and preserve metaphors and idioms with appropriate cultural equivalents."
+   ```
+
+This allows you to provide additional context or instructions to improve translation quality for your specific content.
 
 ### Alternative: Manual Docker Commands
 
